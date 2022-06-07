@@ -1,0 +1,17 @@
+{
+  "name": "streamtest",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@videojs/http-streaming": "^2.14.2",
+    "videojs-contrib-quality-levels": "^2.1.0",
+    "videojs-http-source-selector": "^1.1.6",
+    "videojs-preview-thumbnails": "^1.0.5"
+  }
+}

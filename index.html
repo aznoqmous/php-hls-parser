@@ -18,7 +18,7 @@
 <script src="./node_modules/@videojs/http-streaming/dist/videojs-http-streaming.min.js"></script>
 <script src="./node_modules/videojs-contrib-quality-levels/dist/videojs-contrib-quality-levels.min.js"></script>
 <script src="./node_modules/videojs-http-source-selector/dist/videojs-http-source-selector.min.js"></script>
-
+<script src="./node_modules/videojs-sprite-thumbnails/dist/videojs-sprite-thumbnails.min.js"></script>
 <video id=example-video width=600 height=300 class="video-js vjs-default-skin" controls>
     <source
             src="./tmp/video/video-master.m3u8" type="application/x-mpegURL">
@@ -26,9 +26,18 @@
 </video>
 <script>
     var player = videojs('example-video');
+    window.player = player
     player.qualityLevels();
     console.log(player.qualityLevels());
     player.httpSourceSelector();
+    player.spriteThumbnails({
+            url: "./tmp/video/video-sprite.jpg",
+            // start: 0,
+            // duration: 19,
+            interval: 0.5,
+            width: 168,
+            height: 94
+    })
 </script>
 
 </body>

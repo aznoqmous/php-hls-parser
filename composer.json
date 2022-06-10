@@ -1,21 +1,17 @@
 {
     "name": "dev1/streamtest",
-    "autoload": {
-        "psr-4": {
-            "App\\": "src/"
-        }
-    },
     "authors": [
         {
             "name": "aznoqmous",
             "email": "paul.landreau931v@gmail.com"
         }
     ],
-    "require": {
-        "php-ffmpeg/php-ffmpeg": "^0.19.0",
-        "aminyazdanpanah/php-ffmpeg-video-streaming": "^1.2"
-    },
     "require-dev": {
         "symfony/var-dumper": "^5.4"
+    },
+    "autoload": {
+        "psr-4": {
+            "App\\": "src/"
+        }
     }
 }

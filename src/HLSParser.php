@@ -9,24 +9,17 @@ class HLSParser
 
     private $inputFile;
     private $inputFileName;
+
+    private $outputFile;
     private $outputDir;
     private $outputFileName;
 
-    private $ffmpegBinary = "c:/laragon/bin/ffmpeg.exe";
+    private $logFile;
 
-    private $arguments = [
-        "-i" => null, // needed input file
-        "-s" => null, // needed resolution
-        "-profile:v" => "baseline",
-        "-level" => "3.0",
-        "-start_number" => 0,
-        "-hls_time" => 10,
-        "-hls_init_time" => 10,
-        "-hls_list_size" => 0,
-        "-f" => "hls",
-        //"-hls_flags" => "split_by_time",
-        "-force_key_frames" => "expr:gte(t,n_forced*1)"
-    ];
+    private $ffmpegBinary = "c:/laragon/bin/ffmpeg.exe";
+    private $ffprobeBinary = "c:/laragon/bin/ffprobe.exe";
+
+    private $arguments = [];
 
     /**
      * Private constructor: Use HLSParser::open($inputFile) instead
@@ -64,7 +57,7 @@ class HLSParser
     {
         $this->outputDir = $outputDir;
         if ($outputFileName) $this->outputFileName = $outputFileName;
-        if (is_dir($this->outputDir)) rmdir($this->outputDir);
+        //if (is_dir($this->outputDir)) rmdir($this->outputDir);
         if (!is_dir($this->outputDir)) mkdir($this->outputDir);
 
         foreach ($this->resolutions as $res => $resolution) {
@@ -74,29 +67,100 @@ class HLSParser
         return $this->buildMasterFile();
     }
 
+    public function generateThumbnail($outputFile, $timestamp = 0, $resolution=null)
+    {
+        if(!$resolution) $resolution = new Resolution(360, 200);
+        $this->setArguments([
+            "-ss" => date("H:i:s.u", $timestamp),
+            "-frames:v" => 1,
+            "-vf" => "scale=$resolution->width:$resolution->height"
+        ]);
+        $this->setOutputFile($outputFile);
+        $this->exec();
+    }
+
+    public function generateThumbnails($outputDir, $outputFileName = null, $strFrameRate="1/5", $resolution=null)
+    {
+        if(!$resolution) $resolution = new Resolution(168, 94);
+        $this->outputDir = $outputDir;
+        if ($outputFileName) $this->outputFileName = $outputFileName;
+        $this->setArguments([
+            "-vf" => "\"fps=$strFrameRate, scale=$resolution->width:$resolution->height\""
+        ]);
+        $this->setOutputFile("$this->outputDir/$this->outputFileName-%04d.jpg");
+        $this->exec();
+        return array_map(function($file)use($outputDir){
+            return "$outputDir/$file" ;
+        }, array_values(array_filter(scandir($this->outputDir), function($file){
+            return preg_match("/$this->outputFileName-\d*?\.jpg/", $file);
+        })));
+    }
+
+    public function generateThumbnailsSprite($outputFile, $strFrameRate="1/5", $resolution=null){
+        $images = $this->generateThumbnails(dirname($outputFile), "tmp", $strFrameRate);
+        if(!$resolution) $resolution = new Resolution(168, 94);
+        $imagesCount = count($images);
+        $rows = ceil(sqrt($imagesCount));
+        $targetImage = imagecreatetruecolor($resolution->width * $rows, $resolution->height * $rows);
+        $i = 0;
+        for($y=0; $y < $rows; $y++){
+            for($x=0; $x < $rows; $x++){
+                $image = imagecreatefromjpeg($images[$i]);
+                imagecopy($targetImage, $image, $x * $resolution->width, $y * $resolution->height, 0, 0, $resolution->width, $resolution->height);
+                $i++;
+                if($i >= $imagesCount) break;
+            }
+            if($i >= $imagesCount) break;
+        }
+        imagejpeg($targetImage, $outputFile);
+        foreach ($images as $image) unlink($image);
+        return $this;
+    }
+
     /**
      * Generate sliced video + .m3u8 file for given $resolution
      * @param Resolution $resolution
-     * @return void
      * @throws \Exception
      */
     private function export(Resolution $resolution)
     {
-        $this->setInputFile($this->inputFile);
+        $this->setArguments([
+            "-profile:v" => "baseline",
+            "-level" => "3.0",
+            "-start_number" => 0,
+//            "-hls_time" => 10,
+//            "-hls_init_time" => 10,
+            "-hls_list_size" => 0,
+            "-f" => "hls"
+        ]);
         $this->setResolution($resolution);
-        $cmdString = "$this->ffmpegBinary";
+        $this->setOutputFile("$this->outputDir/$this->outputFileName-$resolution->res.m3u8");
+        $this->setLogFile("$this->outputDir/log-$resolution->res.txt");
+
+        return $this->exec();
+    }
+
+    private function getCommand()
+    {
+        $command = "$this->ffmpegBinary -i $this->inputFile";
         foreach ($this->arguments as $key => $value) {
-            $cmdString .= " $key $value";
+            $command .= " $key";
+            if ($value !== null) $command .= " $value";
         }
-        $cmdString .= " $this->outputDir/$this->outputFileName-$resolution->res.m3u8"; // export filename
-        $cmdString .= " 1>$this->outputDir/log-$resolution->res.txt 2>&1"; // log SIGERR
+        if ($this->outputFile) $command .= " $this->outputFile";
+        if ($this->logFile) $command .= " 1>$this->logFile 2>&1"; // log SIGERR
+        return $command;
+    }
 
-        exec($cmdString, $output, $return_code);
-
+    private function exec()
+    {
+        $command = $this->getCommand();
+        exec($command, $output, $return_code);
         if ($return_code) {
             array_splice($output, 0, 11);
             throw new \Exception(implode('<br>', $output));
         }
+        return $this;
     }
 
     /**
@@ -120,22 +184,39 @@ class HLSParser
     # FFMPEG Parameters
     # ---------------------------------------------------------------------------------------------
 
-    private function setInputFile($inputFile)
+    private function setOutputFile($outputFile)
     {
-        $this->arguments["-i"] = $inputFile;
+        $this->outputFile = $outputFile;
+    }
+
+    private function setLogFile($logFile)
+    {
+        $this->logFile = $logFile;
     }
 
     private function setResolution(Resolution $resolution)
     {
-        $this->arguments["-s"] = $resolution->getLabel();
+        $this->setArgument("-s", $resolution->getLabel());
     }
 
     public function setSegmentLength($duration)
     {
-        $this->arguments["-hls_time"] = $duration;
-        $this->arguments["-hls_init_time"] = $duration;
-        $this->arguments["-force_key_frames"] = "expr:gte(t,n_forced*$duration)";
+        $this->setArguments([
+            "-hls_time" => $duration,
+            "-hls_init_time" => $duration,
+            "-force_key_frames" => "expr:gte(t,n_forced*$duration)"
+        ]);
         return $this;
+    }
+
+    public function setArgument($key, $value = null)
+    {
+        $this->arguments[$key] = $value;
+    }
+
+    public function setArguments($arrArguments)
+    {
+        $this->arguments = array_merge($this->arguments, $arrArguments);
     }
 
     # ---------------------------------------------------------------------------------------------
@@ -169,6 +250,19 @@ class HLSParser
     public function getResolutions()
     {
         return $this->resolutions;
+    }
+
+    # ---------------------------------------------------------------------------------------------
+    # FFProbe
+    # ---------------------------------------------------------------------------------------------
+    public function getDuration(){
+        $command = "ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 $this->inputFile";
+        exec($command, $output, $return_code);
+        if ($return_code) {
+            array_splice($output, 0, 11);
+            throw new \Exception(implode('<br>', $output));
+        }
+        return floatval($output[0]);
     }
 
 }

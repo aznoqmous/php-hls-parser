@@ -1,6 +1,6 @@
 <?php
 
-namespace App;
+namespace Aznoqmous\PhpHls;
 
 class HLSParser
 {

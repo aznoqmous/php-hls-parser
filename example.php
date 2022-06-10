@@ -2,7 +2,7 @@
 
 include('vendor/autoload.php');
 
-$video = \App\HLSParser::open("./video.mp4");
+$video = \Aznoqmous\PhpHls\HLSParser::open("./video.mp4");
 
 $video
     ->addDefaultResolutions()
@@ -15,5 +15,5 @@ $duration = $video->getDuration();
 $spriteSize = 40;
 $fps = floor($spriteSize / $duration);
 
-$video->generateThumbnail("./tmp/video/video-thumbnail.jpg", 2, new \App\Resolution(800,600));
+$video->generateThumbnail("./tmp/video/video-thumbnail.jpg", 2, new \Aznoqmous\PhpHls\Resolution(800,600));
 $video->generateThumbnailsSprite("./tmp/video/video-sprite.jpg", $fps);
